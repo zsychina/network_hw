@@ -1,55 +1,42 @@
-import socket
 import cv2
+import io
+import socket
+import struct
+import time
 import pickle
-import threading
+import zlib
 
-transmit_ready = False
-
-def get_flag():
-    global transmit_ready
-    while True:
-        data = client_socket.recv(1024)
-        flag = data.decode()
-        print(flag)
-        if flag == 'RTS':
-            transmit_ready = True
-        elif flag == 'NRTS':
-            transmit_ready = False
-        else:
-            print('Unknown flag')
-        
-def send_image(socket, img):
-    img_serialized = pickle.dumps(img)
-    socket.sendall(img_serialized)
-    print('image sent...')
-
+HOST = '127.0.0.1'
+PORT = 12345
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = ('127.0.0.1', 12345)
-client_socket.connect(server_address)
+client_socket.connect((HOST, PORT))
+connection = client_socket.makefile('wb')
 
-print('Server connected...')
+cam = cv2.VideoCapture(0)
 
-getting_flag_thread = threading.Thread(target=get_flag)
-getting_flag_thread.start()
+cam.set(3, 320)
+cam.set(4, 240)
 
-cap = cv2.VideoCapture(0)
+img_counter = 0
+
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
 
 while True:
-    ret, img = cap.read()
-    img = cv2.resize(img, (640, 480))
+    ret, frame = cam.read()
     
-    print(transmit_ready)
+    cv2.imshow('Client',frame)
+    cv2.waitKey(1)
     
-    if transmit_ready:
-        send_image(client_socket, img)
+    result, frame = cv2.imencode('.jpg', frame, encode_param)
     
-    # cv2.imshow('Client', img)
-    # if cv2.waitKey(1) & 0xFF == ord('q'):
-    #     break
+#    data = zlib.compress(pickle.dumps(frame, 0))
+    data = pickle.dumps(frame, 0)
+    size = len(data)
 
 
-client_socket.close()
-cap.release()
-    
-    
+    print("{}: {}".format(img_counter, size))
+    client_socket.sendall(struct.pack(">L", size) + data)
+    img_counter += 1
+
+cam.release()

@@ -3,10 +3,10 @@ import threading
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-server_address = ('127.0.0.1', 12345)
+server_address = ('10.15.183.54', 12345)
 
 client_socket.connect(server_address)
-print(f'Server {server_address} connected...:')
+print(f'Server {server_address} connected...')
 
 def receive_message():
     while True:

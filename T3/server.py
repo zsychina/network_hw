@@ -1,59 +1,44 @@
 import socket
+import sys
 import cv2
 import pickle
-import threading
-import time
+import numpy as np
+import struct ## new
+import zlib
 
-receive_ready = True
+HOST = '0.0.0.0'
+PORT = 12345
 
-def receive_image(socket): # 卡在死循环出不来
-    print('receiving image...')
-    global receive_ready
-    receive_ready = True
-    data = b''
-    while True:
-        packet = socket.recv(4096)
-        if not packet:
-            break
-        data += packet
-    image = pickle.loads(data)
-    receive_ready = False
-    return image
+s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+print('Socket created')
 
-def send_flag(client_socket):
-    while True:
-        time.sleep(0.1)
-        if receive_ready:
-            client_socket.send('RTS'.encode())
-        else:
-            client_socket.send('NRTS'.encode())
-        
+s.bind((HOST,PORT))
+print('Socket bind complete')
+s.listen(10)
+print('Socket now listening')
 
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+conn,addr=s.accept()
 
-server_address = ('127.0.0.1', 12345)
-server_socket.bind(server_address)
-
-server_socket.listen(5)
-
-print('Waiting clients...')
-
-client_socket, client_address = server_socket.accept()
-
-print(f'{client_address} connected...')
-
-sending_flag_thread = threading.Thread(target=send_flag, args=(client_socket,))
-sending_flag_thread.start()
-
-
+data = b""
+payload_size = struct.calcsize(">L")
+print("payload_size: {}".format(payload_size))
 while True:
-    img = receive_image(client_socket)
-    print('image received!')
-    cv2.imshow('Server', img)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    while len(data) < payload_size:
+        print("Recv: {}".format(len(data)))
+        data += conn.recv(4096)
 
-server_socket.close()
-cv2.destroyAllWindows()
+    print("Done Recv: {}".format(len(data)))
+    packed_msg_size = data[:payload_size]
+    data = data[payload_size:]
+    msg_size = struct.unpack(">L", packed_msg_size)[0]
+    print("msg_size: {}".format(msg_size))
+    while len(data) < msg_size:
+        data += conn.recv(4096)
+    frame_data = data[:msg_size]
+    data = data[msg_size:]
 
-
+    frame=pickle.loads(frame_data, fix_imports=True, encoding="bytes")
+    frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+    cv2.imshow('Server',frame)
+    cv2.waitKey(1)
+    
